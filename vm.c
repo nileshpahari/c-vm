@@ -70,6 +70,8 @@ static inline void not(u16 i) {
 
 #define FL(i) ((i >> 10) & 1)
 
+#define FCND(i) ((i >> 9) & 0x7)
+
 // Memory Loading
 static inline void ld(u16 i) {
   reg[DR1(i)] = mr(reg[RPC] + POFF9(i));
@@ -114,8 +116,10 @@ static inline void jsr(u16 i) {
 	reg[RPC] = (FL(i)) ? (reg[RPC] + POFF11(i)) : reg[SR1(i)];
 }
 
-static inline void br(u16 i) {
-
+static inline void br(u16 i) { // OPCODE [n z p] [offset9]
+	if (reg[RCND] & FCND(i)) {
+		reg[RPC] = reg[RPC] + POFF11(i);
+	}
 }
 
 // Function pointer array for instruction execution
