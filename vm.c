@@ -62,7 +62,7 @@ static inline void add(u16 i) {
 }
 
 static inline void and(u16 i) {
-  reg[DR1(i)] = reg[SR1(i)] + (FIMM(i) ? SEXTMM(i) : reg[SR2(i)]);
+  reg[DR1(i)] = reg[SR1(i)] & (FIMM(i) ? SEXTMM(i) : reg[SR2(i)]);
   uf(DR1(i));
 }
 
@@ -75,24 +75,24 @@ static inline void not(u16 i) {
 #define POFF9(i) sext((i) & 0x1FF, 9)
 #define POFF6(i) sext((i) & 0x3F, 6)
 
-#define FL(i) ((i >> 10) & 1)
+#define FL(i) ((i >> 11) & 1)
 
 #define FCND(i) ((i >> 9) & 0x7)
 
 // Memory Loading
 static inline void ld(u16 i) {
   reg[DR1(i)] = mr(reg[RPC] + POFF9(i));
-  uf(reg[DR1(i)]);
+  uf(DR1(i));
 }
 
 static inline void ldi(u16 i) {
   reg[DR1(i)] = mr(mr(reg[RPC] + POFF9(i)));
-  uf(reg[DR1(i)]);
+  uf(DR1(i));
 }
 
 static inline void ldr(u16 i) {
   reg[DR1(i)] = mr(reg[SR1(i)] + POFF6(i));
-  uf(reg[DR1(i)]);
+  uf(DR1(i));
 }
 
 static inline void lea(u16 i) {
@@ -117,7 +117,7 @@ static inline void jsr(u16 i) {
 
 static inline void br(u16 i) { // OPCODE [n z p] [offset9]
   if (reg[RCND] & FCND(i)) {
-    reg[RPC] = reg[RPC] + POFF11(i);
+    reg[RPC] = reg[RPC] + POFF9(i);
   }
 }
 
@@ -144,7 +144,7 @@ static inline void tgetc() { reg[R0] = getchar(); }
 static inline void tout() { fprintf(stdout, "%c", (char)reg[R0]); }
 
 static inline void tputs() {
-  uint16_t *p = mem + reg[R0]; //  //
+  u16 *p = mem + reg[R0]; //  //
   while (*p) {
     fprintf(stdout, "%c", (char)*p);
     p++;
@@ -156,7 +156,9 @@ static inline void tin() {
   fprintf(stdout, "%c", (char)reg[R0]);
 }
 
-static inline void thalt() { running = false; }
+static inline void thalt() {
+  running = false;
+}
 
 static inline void tinu16() { fscanf(stdin, "%hu", &reg[R0]); }
 
@@ -166,27 +168,44 @@ static inline void toutu16() { fprintf(stdout, "%hu\n", reg[R0]); }
 
 trp_ex_f trp_ex[8] = {tgetc, tout, tputs, tin, tputsp, thalt, tinu16, toutu16};
 
-static inline void trap(uint16_t i) { trp_ex[TRP(i) - trp_offset](); }
+static inline void trap(u16 i) {
+  u16 idx = TRP(i) - trp_offset;
+  if (idx < 8) {
+    trp_ex[idx]();
+  } else {
+    printf("Invalid TRAP: %x\n", TRP(i));
+    running = false;
+  }
+}
+
+static inline void res(u16 i) {
+
+}
+
+static inline void rti(u16 i) {
+
+}
 
 // Function pointer array for instruction execution // TODO: impl `res` and
 // `rti`
-op_ex_f op_ex[NOPS] = {br,  add, ld,  st,  jsr, and, ldr,
-                       str, not, ldi, sti, jmp, lea, trap};
+op_ex_f op_ex[NOPS] = {
+    br, add, ld, st, jsr, and, ldr, str, rti, not, ldi, sti, jmp, res, lea, trap
+};
 
-void start(uint16_t offset) {
+void start(u16 offset) {
   // Initialize RPC to program start
   reg[RPC] = PC_START + offset;
 
   while (running) {
     // FETCH
-    uint16_t i = mr(reg[RPC]++);
-
+    u16 i = mr(reg[RPC]++);
     // DECODE + EXECUTE
     op_ex[OPC(i)](i);
+	printf("PC: %04x INST: %04x\n", reg[RPC]-1, i);
   }
 }
 
-void id_img(char *fname, uint16_t offset) {
+void id_img(char *fname, u16 offset) {
   char *check = strstr(fname, ".obj");
   if (check == NULL) {
     printf("\n The provided file is not .obj, Pls pass a .obj file\n");
@@ -199,8 +218,8 @@ void id_img(char *fname, uint16_t offset) {
     exit(1);
   }
 
-  uint16_t *p = mem + PC_START + offset;
-  fread(p, sizeof(uint16_t), (UINT16_MAX - PC_START), in);
+  u16 *p = mem + PC_START + offset;
+  fread(p, sizeof(u16), (UINT16_MAX - PC_START), in);
   fclose(in);
 }
 
